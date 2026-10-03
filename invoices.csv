@@ -1,0 +1,5 @@
+invoice_id,client_name,contact_email,project_name,amount,days_overdue,status
+INV-101,Apex Robotics (Strict NDA),billing@apexrobotics.io,Q3 Design System,1800,28,overdue
+INV-102,Northstar Gaming Studio,accounts@northstargames.com,Shader Optimization Pass,950,12,overdue
+INV-103,Vertex Cloud Labs,finance@vertexcloud.dev,Landing Page Revamp,2200,0,paid
+INV-104,BlueWave Health Media,ap@bluewavehealth.org,Dashboard UI Prototype,1450,39,overdue
