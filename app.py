@@ -1,24 +1,53 @@
 import os
+import sys
+import logging
 import requests
 import streamlit as st
 import pandas as pd
-from seed_data import generate_datasets
-from agent import (
-    build_cashflow_graph,
-    compute_tabpfn_probabilities,
-    get_redacted_invoice_payload,
-)
-from features import (
-    generate_email_templates,
-    forecast_multi_month,
-    generate_summary_report,
-    export_to_csv,
-)
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 st.set_page_config(page_title="CashflowBuddy | Gemma + TabPFN", layout="wide")
 
-if not os.path.exists("invoices.csv") or not os.path.exists("monthly_history.csv"):
-    generate_datasets()
+try:
+    from seed_data import generate_datasets
+except Exception as e:
+    logger.error(f"Failed to import seed_data: {e}")
+    st.error(f"Import error: {e}")
+    sys.exit(1)
+
+try:
+    from agent import (
+        build_cashflow_graph,
+        compute_tabpfn_probabilities,
+        get_redacted_invoice_payload,
+    )
+except Exception as e:
+    logger.error(f"Failed to import agent: {e}")
+    st.error(f"Agent import error: {e}")
+    sys.exit(1)
+
+try:
+    from features import (
+        generate_email_templates,
+        forecast_multi_month,
+        generate_summary_report,
+        export_to_csv,
+    )
+except Exception as e:
+    logger.error(f"Failed to import features: {e}")
+    st.error(f"Features import error: {e}")
+    sys.exit(1)
+
+try:
+    if not os.path.exists("invoices.csv") or not os.path.exists("monthly_history.csv"):
+        logger.info("Generating sample datasets...")
+        generate_datasets()
+        logger.info("Datasets generated successfully")
+except Exception as e:
+    logger.error(f"Failed to generate datasets: {e}")
+    st.warning(f"Could not generate sample data: {e}. Using empty state.")
 
 st.title("CashflowBuddy: Split-Brain Open-Source Runway Agent")
 st.caption(
@@ -70,22 +99,32 @@ with tab1:
 
     with col1:
         st.subheader("Local Private Vault (Never Leaves PC)")
-        st.dataframe(pd.read_csv("invoices.csv"), use_container_width=True)
+        try:
+            if os.path.exists("invoices.csv"):
+                st.dataframe(pd.read_csv("invoices.csv"), use_container_width=True)
+            else:
+                st.warning("invoices.csv not found. Run seed_data.py first.")
+        except Exception as e:
+            st.error(f"Error reading invoices: {e}")
 
-        stats = compute_tabpfn_probabilities(expenses, invoiced)
-        m1, m2 = st.columns(2)
-        m1.metric(
-            "TabPFN Baseline Crunch Risk",
-            f"{stats['prob_baseline']:.1%}",
-            delta="High Deficit Risk" if stats["prob_baseline"] > 0.5 else "Manageable",
-            delta_color="inverse",
-        )
-        m2.metric(
-            "Risk After Collecting INV-104",
-            f"{stats['prob_recovered']:.1%}",
-            delta=f"-{(stats['prob_baseline'] - stats['prob_recovered']):.1%} risk reduction",
-            delta_color="normal",
-        )
+        try:
+            stats = compute_tabpfn_probabilities(expenses, invoiced)
+            m1, m2 = st.columns(2)
+            m1.metric(
+                "TabPFN Baseline Crunch Risk",
+                f"{stats['prob_baseline']:.1%}",
+                delta="High Deficit Risk" if stats["prob_baseline"] > 0.5 else "Manageable",
+                delta_color="inverse",
+            )
+            m2.metric(
+                "Risk After Collecting INV-104",
+                f"{stats['prob_recovered']:.1%}",
+                delta=f"-{(stats['prob_baseline'] - stats['prob_recovered']):.1%} risk reduction",
+                delta_color="normal",
+            )
+        except Exception as e:
+            st.error(f"Error computing TabPFN forecast: {e}")
+            st.info("Ensure monthly_history.csv exists with proper columns.")
 
     with col2:
         st.subheader("Gemma + LangGraph Action Plan")
@@ -117,12 +156,22 @@ with tab2:
     c1, c2 = st.columns(2)
     with c1:
         st.markdown("**1. Raw Local CSV on Disk (Contains NDA Client Names & Emails)**")
-        st.dataframe(
-            pd.read_csv("invoices.csv")[["invoice_id", "client_name", "contact_email", "amount", "days_overdue"]]
-        )
+        try:
+            if os.path.exists("invoices.csv"):
+                st.dataframe(
+                    pd.read_csv("invoices.csv")[["invoice_id", "client_name", "contact_email", "amount", "days_overdue"]]
+                )
+            else:
+                st.warning("invoices.csv not found")
+        except Exception as e:
+            st.error(f"Error reading invoices: {e}")
+    
     with c2:
         st.markdown("**2. Exact Redacted String Sent Over Cloudflare Tunnel to Colab**")
-        st.code(get_redacted_invoice_payload(), language="text")
+        try:
+            st.code(get_redacted_invoice_payload(), language="text")
+        except Exception as e:
+            st.error(f"Error generating redacted ledger: {e}")
 
 with tab3:
     st.subheader("Ready-to-Send Payment Reminder Emails")
